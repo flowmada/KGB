@@ -10,6 +10,8 @@
 
 **Design doc:** `docs/plans/2026-02-21-xbcache-design.md`
 
+**UI Tests:** Deferred. The KGBUITests target exists in the project but XCUI test development is intentionally skipped — the app's value is in its data pipeline (watch → extract → store), which is covered by unit tests. XCUI tests for the menu bar popover can be added later if the user requests them (see Task 15).
+
 ---
 
 ## Phase 1: Project Setup
@@ -1581,6 +1583,27 @@ git add -A && git commit -m "Final polish and end-to-end verification"
 
 ---
 
+---
+
+## Phase 9: UI Tests (DEFERRED — requires user permission)
+
+### Task 15: XCUI Tests for Menu Bar Popover
+
+**Status:** Deferred. Do not start without explicit user approval.
+
+The KGBUITests target already exists in the project. If the user requests UI test coverage, implement tests for:
+- App launches and menu bar icon appears
+- Clicking status item opens the popover
+- Command rows display and copy-to-clipboard works
+- Bug flag icon and report banner interactions
+
+This is low priority because:
+- The menu bar UI surface is small (icon + popover)
+- XCUI testing a `MenuBarExtra`/`NSStatusItem` requires extra plumbing (`app.statusItems`, etc.)
+- The real complexity lives in the data pipeline, which is fully covered by unit tests in Tasks 2-5 and 10-11
+
+---
+
 ## Summary
 
 | Phase | Tasks | What it delivers |
@@ -1593,3 +1616,4 @@ git add -A && git commit -m "Final polish and end-to-end verification"
 | 6 — Wiring | 9 | Full pipeline: watch → extract → store → display |
 | 7 — Bug Reports | 10-12 | Flag, match, compose, send |
 | 8 — Polish | 13-14 | Settings, icon, end-to-end verification |
+| 9 — UI Tests | 15 | **DEFERRED** — XCUI tests for popover (requires user permission) |
