@@ -28,11 +28,12 @@ final class CommandStore {
     }
 
     func add(_ command: BuildCommand) {
-        // Replace existing command for same scheme+action+project, or append
+        // Replace existing command for same scheme+action+project, unless flagged as bug
         if let idx = allCommands.firstIndex(where: {
             $0.scheme == command.scheme &&
             $0.action == command.action &&
-            $0.projectName == command.projectName
+            $0.projectName == command.projectName &&
+            !$0.isFlaggedAsBug
         }) {
             allCommands[idx] = command
         } else {
@@ -40,6 +41,44 @@ final class CommandStore {
         }
         save()
     }
+
+    // MARK: - Bug Reporting
+
+    struct BugReport {
+        let brokenCommand: BuildCommand
+        let workingCommand: BuildCommand
+    }
+
+    /// Currently pending bug report (broken flagged + matching fix detected)
+    var pendingBugReport: BugReport? {
+        guard let flagged = allCommands.first(where: { $0.isFlaggedAsBug }),
+              let match = allCommands.first(where: {
+                  !$0.isFlaggedAsBug &&
+                  $0.scheme == flagged.scheme &&
+                  $0.projectName == flagged.projectName &&
+                  $0.action == flagged.action &&
+                  $0.timestamp > flagged.timestamp
+              }) else {
+            return nil
+        }
+        return BugReport(brokenCommand: flagged, workingCommand: match)
+    }
+
+    func flagAsBug(_ id: UUID) {
+        if let idx = allCommands.firstIndex(where: { $0.id == id }) {
+            allCommands[idx].isFlaggedAsBug = true
+            save()
+        }
+    }
+
+    func clearBugFlag(_ id: UUID) {
+        if let idx = allCommands.firstIndex(where: { $0.id == id }) {
+            allCommands[idx].isFlaggedAsBug = false
+            save()
+        }
+    }
+
+    // MARK: - Persistence
 
     func save() {
         guard let url = persistenceURL else { return }
