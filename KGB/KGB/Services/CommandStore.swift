@@ -5,6 +5,7 @@ import Observation
 final class CommandStore {
     private(set) var allCommands: [BuildCommand] = []
     var isScanning: Bool = false
+    private(set) var pendingExtractions: [PendingExtraction] = []
     private let persistenceURL: URL?
 
     struct ProjectGroup: Identifiable {
@@ -41,6 +42,44 @@ final class CommandStore {
             allCommands.append(command)
         }
         save()
+    }
+
+    // MARK: - Pending Extractions
+
+    struct PendingExtraction: Identifiable {
+        let id: UUID
+        let scheme: String
+        let xcresultPath: String
+        var isFailed: Bool
+
+        init(id: UUID = UUID(), scheme: String, xcresultPath: String, isFailed: Bool = false) {
+            self.id = id
+            self.scheme = scheme
+            self.xcresultPath = xcresultPath
+            self.isFailed = isFailed
+        }
+    }
+
+    @discardableResult
+    func addPending(scheme: String, xcresultPath: String) -> UUID {
+        let pending = PendingExtraction(scheme: scheme, xcresultPath: xcresultPath)
+        pendingExtractions.append(pending)
+        return pending.id
+    }
+
+    func resolvePending(_ id: UUID, with command: BuildCommand) {
+        pendingExtractions.removeAll { $0.id == id }
+        add(command)
+    }
+
+    func failPending(_ id: UUID) {
+        if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
+            pendingExtractions[idx].isFailed = true
+        }
+    }
+
+    func removePending(_ id: UUID) {
+        pendingExtractions.removeAll { $0.id == id }
     }
 
     // MARK: - Bug Reporting
