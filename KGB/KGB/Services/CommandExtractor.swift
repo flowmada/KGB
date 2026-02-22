@@ -59,8 +59,7 @@ struct CommandExtractor {
         // 2. Run xcresulttool
         let jsonData = try await shell.run("xcresulttool", arguments: [
             "get", "build-results",
-            "--path", xcresultPath,
-            "--format", "json"
+            "--path", xcresultPath
         ])
 
         // 3. Parse destination from JSON
