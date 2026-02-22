@@ -13,6 +13,14 @@ final class DerivedDataAccess {
         return NSHomeDirectory() + "/" + Self.defaultRelativePath
     }
 
+    var tildeAbbreviatedPath: String {
+        let home = NSHomeDirectory()
+        if derivedDataPath.hasPrefix(home) {
+            return "~" + derivedDataPath.dropFirst(home.count)
+        }
+        return derivedDataPath
+    }
+
     init() {
         checkAccess()
     }
