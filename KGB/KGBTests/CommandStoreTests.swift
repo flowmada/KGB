@@ -47,6 +47,33 @@ struct CommandStoreTests {
         #expect(store2.allCommands.first?.scheme == "MyApp")
     }
 
+    @Test func removeCommand_removesCommandAndSaves() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kgb-test-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = CommandStore(persistenceURL: url)
+        let cmd = makeCommand(scheme: "MyApp")
+        store.add(cmd)
+        #expect(store.allCommands.count == 1)
+
+        store.removeCommand(cmd.id)
+        #expect(store.allCommands.isEmpty)
+
+        // Verify it persisted
+        let store2 = CommandStore(persistenceURL: url)
+        #expect(store2.allCommands.isEmpty)
+    }
+
+    @Test func removeCommand_withUnknownId_doesNothing() {
+        let store = CommandStore(persistenceURL: nil)
+        store.add(makeCommand(scheme: "MyApp"))
+        #expect(store.allCommands.count == 1)
+
+        store.removeCommand(UUID())
+        #expect(store.allCommands.count == 1)
+    }
+
     // MARK: - Helpers
 
     private func makeCommand(

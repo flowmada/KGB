@@ -5,6 +5,7 @@ import Observation
 final class CommandStore {
     private(set) var allCommands: [BuildCommand] = []
     var isScanning: Bool = false
+    private(set) var pendingExtractions: [PendingExtraction] = []
     private let persistenceURL: URL?
 
     struct ProjectGroup: Identifiable {
@@ -40,6 +41,70 @@ final class CommandStore {
         } else {
             allCommands.append(command)
         }
+        save()
+    }
+
+    // MARK: - Pending Extractions
+
+    struct PendingExtraction: Identifiable {
+        let id: UUID
+        let scheme: String
+        let destination: String?
+        var xcresultPath: String?
+        var state: State
+
+        enum State {
+            case waiting    // spinner, actively trying to extract xcresult
+            case buildOnly  // have build info, no full command yet
+            case failed     // couldn't parse xcactivitylog
+        }
+
+        init(id: UUID = UUID(), scheme: String, destination: String? = nil,
+             xcresultPath: String? = nil, state: State = .buildOnly) {
+            self.id = id
+            self.scheme = scheme
+            self.destination = destination
+            self.xcresultPath = xcresultPath
+            self.state = state
+        }
+    }
+
+    @discardableResult
+    func addPending(scheme: String, destination: String? = nil,
+                    xcresultPath: String? = nil, state: PendingExtraction.State = .buildOnly) -> UUID {
+        let pending = PendingExtraction(scheme: scheme, destination: destination,
+                                         xcresultPath: xcresultPath, state: state)
+        pendingExtractions.append(pending)
+        return pending.id
+    }
+
+    func resolvePending(_ id: UUID, with command: BuildCommand) {
+        pendingExtractions.removeAll { $0.id == id }
+        add(command)
+    }
+
+    func updatePendingState(_ id: UUID, to state: PendingExtraction.State) {
+        if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
+            pendingExtractions[idx].state = state
+        }
+    }
+
+    func updatePendingXcresultPath(_ id: UUID, path: String) {
+        if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
+            pendingExtractions[idx].xcresultPath = path
+        }
+    }
+
+    func pendingForScheme(_ scheme: String) -> PendingExtraction? {
+        pendingExtractions.first { $0.scheme == scheme && $0.state == .buildOnly }
+    }
+
+    func removePending(_ id: UUID) {
+        pendingExtractions.removeAll { $0.id == id }
+    }
+
+    func removeCommand(_ id: UUID) {
+        allCommands.removeAll { $0.id == id }
         save()
     }
 
