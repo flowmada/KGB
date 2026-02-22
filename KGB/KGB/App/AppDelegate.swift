@@ -7,7 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private var watcher: DerivedDataWatcher?
     private let extractor = CommandExtractor()
-    private var accessObservation: (any Sendable)?
     let commandStore = CommandStore(
         persistenceURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("KGB/commands.json")
@@ -32,29 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startWatching()
             scanExistingResults()
         }
-
-        accessObservation = withObservationTracking {
-            _ = self.derivedDataAccess.hasAccess
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                self?.onAccessChanged()
-            }
-        }
-    }
-
-    private func onAccessChanged() {
-        if derivedDataAccess.hasAccess && watcher == nil {
-            startWatching()
-            scanExistingResults()
-        }
-
-        accessObservation = withObservationTracking {
-            _ = self.derivedDataAccess.hasAccess
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                self?.onAccessChanged()
-            }
-        }
     }
 
     // MARK: - Watching
@@ -70,15 +46,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Scan existing results
 
-    /// Find all .xcresult bundles from today and process them.
     private func scanExistingResults() {
         let derivedDataPath = derivedDataAccess.derivedDataPath
         let todayStamp = todayDateStamp()
+
+        commandStore.isScanning = true
 
         Task.detached { [weak self] in
             guard let self else { return }
             let fm = FileManager.default
             let derivedDataURL = URL(fileURLWithPath: derivedDataPath)
+
+            defer {
+                Task { @MainActor in
+                    self.commandStore.isScanning = false
+                }
+            }
 
             guard let projectDirs = try? fm.contentsOfDirectory(
                 at: derivedDataURL,
@@ -86,7 +69,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ) else { return }
 
             for projectDir in projectDirs {
-                // Check Logs/Build/ and Logs/Test/ for .xcresult bundles
                 let logsDirs = ["Logs/Build", "Logs/Test"]
                 for logsDir in logsDirs {
                     let logsURL = projectDir.appendingPathComponent(logsDir)
@@ -97,7 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                     for item in contents where item.pathExtension == "xcresult" {
                         let filename = item.lastPathComponent
-                        // Filter to today's results by checking the date stamp in the filename
                         if filename.contains(todayStamp) {
                             self.processXCResult(at: item.path, derivedDataPath: derivedDataPath)
                         }
@@ -107,7 +88,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Returns today's date as "YYYY.MM.DD" to match xcresult filename format.
     private func todayDateStamp() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy.MM.dd"
@@ -138,7 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Resolve the project source directory from DerivedData paths.
     private func resolveProjectSourceDir(derivedDataPath: String, xcresultPath: String) -> String {
         let components = xcresultPath
             .replacingOccurrences(of: derivedDataPath + "/", with: "")

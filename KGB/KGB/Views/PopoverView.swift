@@ -45,24 +45,33 @@ struct PopoverView: View {
             }
 
             if !derivedDataAccess.hasAccess {
-                // Onboarding — request DerivedData access
+                // DerivedData not found
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "hammer.fill")
+                    Image(systemName: "folder.badge.questionmark")
                         .font(.largeTitle)
                         .foregroundStyle(.secondary)
-                    Text("Welcome to KGB")
+                    Text("DerivedData not found")
                         .font(.title3.bold())
-                    Text("KGB watches your DerivedData folder for Xcode builds and gives you one-click copyable xcodebuild commands.")
+                    Text("Set a custom DerivedData path in Settings if yours isn't in the default location.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
-                    Button("Grant Access to DerivedData") {
-                        derivedDataAccess.requestAccess()
+                    SettingsLink {
+                        Text("Open Settings")
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular)
+                }
+                Spacer()
+            } else if store.isScanning && store.groupedByProject.isEmpty {
+                Spacer()
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.regular)
+                    Text("Scanning DerivedData...")
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             } else if store.groupedByProject.isEmpty {

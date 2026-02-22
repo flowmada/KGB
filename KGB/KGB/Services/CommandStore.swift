@@ -4,6 +4,7 @@ import Observation
 @Observable
 final class CommandStore {
     private(set) var allCommands: [BuildCommand] = []
+    var isScanning: Bool = false
     private let persistenceURL: URL?
 
     struct ProjectGroup: Identifiable {
