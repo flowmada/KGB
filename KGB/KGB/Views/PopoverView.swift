@@ -20,6 +20,25 @@ struct PopoverView: View {
 
             Divider()
 
+            // Bug report banner
+            if let report = store.pendingBugReport {
+                VStack(spacing: 6) {
+                    Text("A fix was detected! Send a bug report?")
+                        .font(.callout)
+                    Button("Send Report") {
+                        BugReportComposer.openMailto(report)
+                        store.clearBugFlag(report.brokenCommand.id)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.1))
+
+                Divider()
+            }
+
             if store.groupedByProject.isEmpty {
                 Spacer()
                 Text("No builds detected yet")
@@ -34,7 +53,7 @@ struct PopoverView: View {
                         ForEach(store.groupedByProject) { group in
                             Section {
                                 ForEach(group.commands) { cmd in
-                                    CommandRowView(command: cmd)
+                                    CommandRowView(command: cmd, store: store)
                                     Divider().padding(.leading, 8)
                                 }
                             } header: {
