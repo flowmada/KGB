@@ -1,6 +1,9 @@
 import AppKit
 import Observation
+import os
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.kgb.app", category: "AppDelegate")
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
@@ -28,8 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
 
         if derivedDataAccess.hasAccess {
+            logger.info("DerivedData access OK, starting watcher and scan")
             startWatching()
             scanExistingResults()
+        } else {
+            logger.warning("No DerivedData access at \(self.derivedDataAccess.derivedDataPath)")
         }
     }
 
@@ -40,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] xcresultPath in
             guard let self else { return }
+            logger.info("Watcher detected: \(xcresultPath)")
             Task {
                 let projectSourceDir = self.scanner.resolveProjectSourceDir(
                     derivedDataPath: derivedDataPath,
@@ -54,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         self.commandStore.add(command)
                     }
                 } catch {
-                    print("KGB: Skipped \(xcresultPath): \(error)")
+                    logger.warning("Watcher skipped \(xcresultPath): \(error)")
                 }
             }
         }
@@ -89,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }

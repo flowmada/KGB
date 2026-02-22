@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.kgb.app", category: "Scanner")
 
 // MARK: - Protocol for testability
 
@@ -55,10 +58,14 @@ struct DerivedDataScanner {
     func findTodaysResults(in derivedDataPath: String) -> [String] {
         let derivedDataURL = URL(fileURLWithPath: derivedDataPath)
         let todayStamp = currentDateStamp()
+        logger.info("Scanning \(derivedDataPath) for xcresults matching \(todayStamp)")
 
         guard let projectDirs = try? enumerator.contentsOfDirectory(at: derivedDataURL) else {
+            logger.warning("Could not list contents of \(derivedDataPath)")
             return []
         }
+
+        logger.info("Found \(projectDirs.count) project dirs")
 
         var results: [String] = []
         for projectDir in projectDirs {
@@ -74,6 +81,7 @@ struct DerivedDataScanner {
                 }
             }
         }
+        logger.info("Found \(results.count) xcresult(s) for today")
         return results
     }
 
@@ -106,16 +114,19 @@ struct DerivedDataScanner {
                 derivedDataPath: derivedDataPath,
                 xcresultPath: path
             )
+            logger.info("Extracting: \(path) (projectDir: \(projectSourceDir))")
             do {
                 let command = try await extractor.extract(
                     xcresultPath: path,
                     projectSourceDir: projectSourceDir
                 )
+                logger.info("Extracted: \(command.scheme) \(command.action.rawValue)")
                 commands.append(command)
             } catch {
-                print("KGB: Skipped \(path): \(error)")
+                logger.error("Skipped \(path): \(error)")
             }
         }
+        logger.info("Scan complete: \(commands.count) command(s) extracted")
         return commands
     }
 }
