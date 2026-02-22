@@ -3,6 +3,7 @@ import SwiftUI
 struct PopoverView: View {
     let store: CommandStore
     let derivedDataAccess: DerivedDataAccess
+    var retryExtraction: (UUID) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,7 +66,7 @@ struct PopoverView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-            } else if store.groupedByProject.isEmpty {
+            } else if store.groupedByProject.isEmpty && store.pendingExtractions.isEmpty {
                 Spacer()
                 Text("No builds detected yet")
                     .foregroundStyle(.secondary)
@@ -76,6 +77,14 @@ struct PopoverView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
+                        // Pending extractions
+                        ForEach(store.pendingExtractions) { pending in
+                            PendingRowView(pending: pending) {
+                                retryExtraction(pending.id)
+                            }
+                            Divider().padding(.leading, 8)
+                        }
+
                         ForEach(store.groupedByProject) { group in
                             Section {
                                 ForEach(group.commands) { cmd in
@@ -119,17 +128,12 @@ struct PopoverView: View {
 #Preview {
     PopoverView(store: {
         let store = CommandStore(persistenceURL: nil)
+        store.addPending(scheme: "PizzaCoachWatch", xcresultPath: "/tmp/fake.xcresult")
         store.add(BuildCommand(
             projectPath: "/Users/dev/MyApp/MyApp.xcodeproj",
             projectType: .project, scheme: "MyApp", action: .build,
             platform: "iOS Simulator", deviceName: "iPhone 17 Pro",
             osVersion: "26.2", timestamp: Date()
-        ))
-        store.add(BuildCommand(
-            projectPath: "/Users/dev/MyApp/MyApp.xcodeproj",
-            projectType: .project, scheme: "MyApp", action: .test,
-            platform: "iOS Simulator", deviceName: "iPhone 17 Pro",
-            osVersion: "26.2", timestamp: Date().addingTimeInterval(-600)
         ))
         return store
     }(), derivedDataAccess: DerivedDataAccess())
