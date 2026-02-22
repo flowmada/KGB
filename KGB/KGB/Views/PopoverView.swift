@@ -13,6 +13,12 @@ struct PopoverView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } label: {
+                    Image(systemName: "gear")
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
