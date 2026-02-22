@@ -18,6 +18,7 @@ final class DerivedDataAccess {
     }
 
     func checkAccess() {
-        hasAccess = FileManager.default.isReadableFile(atPath: derivedDataPath)
+        var isDir: ObjCBool = false
+        hasAccess = FileManager.default.fileExists(atPath: derivedDataPath, isDirectory: &isDir) && isDir.boolValue
     }
 }

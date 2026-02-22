@@ -27,11 +27,8 @@ final class DerivedDataWatcher {
                 let paths = Unmanaged<CFArray>.fromOpaque(eventPaths)
                     .takeUnretainedValue() as! [String]
                 for i in 0..<numEvents {
-                    let path = paths[i]
-                    if path.hasSuffix(".xcresult") || path.hasSuffix(".xcresult/") {
-                        watcher.callback(path.hasSuffix("/")
-                            ? String(path.dropLast())
-                            : path)
+                    if let result = watcher.xcresultPath(from: paths[i]) {
+                        watcher.callback(result)
                     }
                 }
             },
@@ -48,6 +45,14 @@ final class DerivedDataWatcher {
         guard let stream else { return }
         FSEventStreamSetDispatchQueue(stream, DispatchQueue.global(qos: .utility))
         FSEventStreamStart(stream)
+    }
+
+    /// Returns the normalized path if it refers to an `.xcresult` bundle, or `nil` otherwise.
+    func xcresultPath(from eventPath: String) -> String? {
+        guard eventPath.hasSuffix(".xcresult") || eventPath.hasSuffix(".xcresult/") else {
+            return nil
+        }
+        return eventPath.hasSuffix("/") ? String(eventPath.dropLast()) : eventPath
     }
 
     func stop() {
