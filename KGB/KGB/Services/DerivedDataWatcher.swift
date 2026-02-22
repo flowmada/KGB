@@ -7,7 +7,7 @@ final class DerivedDataWatcher {
 
     /// - Parameters:
     ///   - path: DerivedData directory to watch
-    ///   - callback: Called with the full path to each new .xcresult bundle
+    ///   - callback: Called with the full path to each new .xcresult bundle or .xcactivitylog file
     init(path: String, callback: @escaping @Sendable (String) -> Void) {
         self.watchPath = path
         self.callback = callback
@@ -27,7 +27,7 @@ final class DerivedDataWatcher {
                 let paths = Unmanaged<CFArray>.fromOpaque(eventPaths)
                     .takeUnretainedValue() as! [String]
                 for i in 0..<numEvents {
-                    if let result = watcher.xcresultPath(from: paths[i]) {
+                    if let result = watcher.buildArtifactPath(from: paths[i]) {
                         watcher.callback(result)
                     }
                 }
@@ -47,12 +47,15 @@ final class DerivedDataWatcher {
         FSEventStreamStart(stream)
     }
 
-    /// Returns the normalized path if it refers to an `.xcresult` bundle, or `nil` otherwise.
-    func xcresultPath(from eventPath: String) -> String? {
-        guard eventPath.hasSuffix(".xcresult") || eventPath.hasSuffix(".xcresult/") else {
-            return nil
+    /// Returns the normalized path if it refers to an `.xcresult` bundle or `.xcactivitylog` file, or `nil` otherwise.
+    func buildArtifactPath(from eventPath: String) -> String? {
+        if eventPath.hasSuffix(".xcresult") || eventPath.hasSuffix(".xcresult/") {
+            return eventPath.hasSuffix("/") ? String(eventPath.dropLast()) : eventPath
         }
-        return eventPath.hasSuffix("/") ? String(eventPath.dropLast()) : eventPath
+        if eventPath.hasSuffix(".xcactivitylog") {
+            return eventPath
+        }
+        return nil
     }
 
     func stop() {
