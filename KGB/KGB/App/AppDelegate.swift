@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private var watcher: DerivedDataWatcher?
     private let scanner = DerivedDataScanner()
+    private var retryTasks: [UUID: Task<Void, Never>] = [:]
     let commandStore = CommandStore(
         persistenceURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("KGB/commands.json")
@@ -26,7 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover.contentViewController = NSHostingController(
-            rootView: PopoverView(store: commandStore, derivedDataAccess: derivedDataAccess)
+            rootView: PopoverView(store: commandStore, derivedDataAccess: derivedDataAccess) { [weak self] pendingId in
+                guard let self,
+                      let pending = commandStore.pendingExtractions.first(where: { $0.id == pendingId }) else { return }
+                // Cancel existing retry task
+                retryTasks[pendingId]?.cancel()
+                retryTasks.removeValue(forKey: pendingId)
+                // Restart extraction immediately
+                attemptExtraction(pendingId: pendingId, xcresultPath: pending.xcresultPath)
+            }
         )
         popover.behavior = .transient
 
@@ -47,25 +56,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] xcresultPath in
             guard let self else { return }
             logger.info("Watcher detected: \(xcresultPath)")
-            Task {
-                let projectSourceDir = self.scanner.resolveProjectSourceDir(
+
+            // Parse scheme from filename for the pending row
+            let filename = URL(fileURLWithPath: xcresultPath).lastPathComponent
+            let scheme = XCResultParser.parseFilename(filename)?.scheme ?? "Unknown"
+
+            Task { @MainActor in
+                let pendingId = self.commandStore.addPending(scheme: scheme, xcresultPath: xcresultPath)
+                self.attemptExtraction(pendingId: pendingId, xcresultPath: xcresultPath)
+            }
+        }
+        watcher?.start()
+    }
+
+    // MARK: - Retry extraction
+
+    private func attemptExtraction(pendingId: UUID, xcresultPath: String) {
+        let maxAttempts = 12
+        let delaySeconds: UInt64 = 5
+        let derivedDataPath = derivedDataAccess.derivedDataPath
+
+        let task = Task {
+            var currentAttempt = 1
+            while currentAttempt <= maxAttempts {
+                if Task.isCancelled { return }
+
+                let projectSourceDir = scanner.resolveProjectSourceDir(
                     derivedDataPath: derivedDataPath,
                     xcresultPath: xcresultPath
                 )
+
                 do {
-                    let command = try await self.scanner.extractor.extract(
+                    let command = try await scanner.extractor.extract(
                         xcresultPath: xcresultPath,
                         projectSourceDir: projectSourceDir
                     )
                     await MainActor.run {
-                        self.commandStore.add(command)
+                        self.commandStore.resolvePending(pendingId, with: command)
+                        self.retryTasks.removeValue(forKey: pendingId)
+                    }
+                    if currentAttempt > 1 {
+                        logger.info("Extracted \(command.scheme) after \(currentAttempt) attempts")
+                    }
+                    return
+                } catch let error as XCResultParser.ParseError where self.isRetryable(error) {
+                    logger.debug("Retry \(currentAttempt)/\(maxAttempts) for \(xcresultPath), waiting \(delaySeconds)s")
+                    currentAttempt += 1
+                    if currentAttempt <= maxAttempts {
+                        try? await Task.sleep(nanoseconds: delaySeconds * 1_000_000_000)
                     }
                 } catch {
-                    logger.warning("Watcher skipped \(xcresultPath): \(error)")
+                    // Non-retryable error — fail immediately
+                    logger.warning("Watcher failed \(xcresultPath): \(error)")
+                    await MainActor.run {
+                        self.commandStore.failPending(pendingId)
+                        self.retryTasks.removeValue(forKey: pendingId)
+                    }
+                    return
                 }
             }
+
+            // Exhausted all retries
+            logger.warning("Failed to extract \(xcresultPath) after \(maxAttempts) attempts")
+            await MainActor.run {
+                self.commandStore.failPending(pendingId)
+                self.retryTasks.removeValue(forKey: pendingId)
+            }
         }
-        watcher?.start()
+
+        retryTasks[pendingId] = task
+    }
+
+    private func isRetryable(_ error: XCResultParser.ParseError) -> Bool {
+        if case .invalidJSON = error { return true }
+        return false
     }
 
     // MARK: - Scan existing results
