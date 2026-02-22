@@ -29,14 +29,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = NSHostingController(
             rootView: PopoverView(store: commandStore, derivedDataAccess: derivedDataAccess) { [weak self] pendingId in
                 guard let self,
-                      let pending = commandStore.pendingExtractions.first(where: { $0.id == pendingId }) else { return }
+                      let pending = commandStore.pendingExtractions.first(where: { $0.id == pendingId }),
+                      let xcresultPath = pending.xcresultPath else { return }
                 // Cancel existing retry task
                 retryTasks[pendingId]?.cancel()
                 retryTasks.removeValue(forKey: pendingId)
-                // Reset failed state so spinner shows again
-                commandStore.resetPending(pendingId)
+                // Reset to waiting so spinner shows again
+                commandStore.updatePendingState(pendingId, to: .waiting)
                 // Restart extraction immediately
-                attemptExtraction(pendingId: pendingId, xcresultPath: pending.xcresultPath)
+                attemptExtraction(pendingId: pendingId, xcresultPath: xcresultPath)
             }
         )
         popover.behavior = .transient
@@ -64,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let scheme = XCResultParser.parseFilename(filename)?.scheme ?? "Unknown"
 
             Task { @MainActor in
-                let pendingId = self.commandStore.addPending(scheme: scheme, xcresultPath: xcresultPath)
+                let pendingId = self.commandStore.addPending(scheme: scheme, xcresultPath: xcresultPath, state: .waiting)
                 self.attemptExtraction(pendingId: pendingId, xcresultPath: xcresultPath)
             }
         }
@@ -111,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // Non-retryable error — fail immediately
                     logger.warning("Watcher failed \(xcresultPath): \(error)")
                     await MainActor.run {
-                        self.commandStore.failPending(pendingId)
+                        self.commandStore.updatePendingState(pendingId, to: .buildOnly)
                         self.retryTasks.removeValue(forKey: pendingId)
                     }
                     return
@@ -121,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Exhausted all retries
             logger.warning("Failed to extract \(xcresultPath) after \(maxAttempts) attempts")
             await MainActor.run {
-                self.commandStore.failPending(pendingId)
+                self.commandStore.updatePendingState(pendingId, to: .buildOnly)
                 self.retryTasks.removeValue(forKey: pendingId)
             }
         }

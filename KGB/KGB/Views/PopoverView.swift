@@ -128,7 +128,7 @@ struct PopoverView: View {
 #Preview {
     PopoverView(store: {
         let store = CommandStore(persistenceURL: nil)
-        store.addPending(scheme: "PizzaCoachWatch", xcresultPath: "/tmp/fake.xcresult")
+        store.addPending(scheme: "PizzaCoachWatch", destination: "Apple Watch Series 11 (46mm)")
         store.add(BuildCommand(
             projectPath: "/Users/dev/MyApp/MyApp.xcodeproj",
             projectType: .project, scheme: "MyApp", action: .build,

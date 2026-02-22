@@ -49,20 +49,31 @@ final class CommandStore {
     struct PendingExtraction: Identifiable {
         let id: UUID
         let scheme: String
-        let xcresultPath: String
-        var isFailed: Bool
+        let destination: String?
+        var xcresultPath: String?
+        var state: State
 
-        init(id: UUID = UUID(), scheme: String, xcresultPath: String, isFailed: Bool = false) {
+        enum State {
+            case waiting    // spinner, actively trying to extract xcresult
+            case buildOnly  // have build info, no full command yet
+            case failed     // couldn't parse xcactivitylog
+        }
+
+        init(id: UUID = UUID(), scheme: String, destination: String? = nil,
+             xcresultPath: String? = nil, state: State = .buildOnly) {
             self.id = id
             self.scheme = scheme
+            self.destination = destination
             self.xcresultPath = xcresultPath
-            self.isFailed = isFailed
+            self.state = state
         }
     }
 
     @discardableResult
-    func addPending(scheme: String, xcresultPath: String) -> UUID {
-        let pending = PendingExtraction(scheme: scheme, xcresultPath: xcresultPath)
+    func addPending(scheme: String, destination: String? = nil,
+                    xcresultPath: String? = nil, state: PendingExtraction.State = .buildOnly) -> UUID {
+        let pending = PendingExtraction(scheme: scheme, destination: destination,
+                                         xcresultPath: xcresultPath, state: state)
         pendingExtractions.append(pending)
         return pending.id
     }
@@ -72,16 +83,20 @@ final class CommandStore {
         add(command)
     }
 
-    func failPending(_ id: UUID) {
+    func updatePendingState(_ id: UUID, to state: PendingExtraction.State) {
         if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
-            pendingExtractions[idx].isFailed = true
+            pendingExtractions[idx].state = state
         }
     }
 
-    func resetPending(_ id: UUID) {
+    func updatePendingXcresultPath(_ id: UUID, path: String) {
         if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
-            pendingExtractions[idx].isFailed = false
+            pendingExtractions[idx].xcresultPath = path
         }
+    }
+
+    func pendingForScheme(_ scheme: String) -> PendingExtraction? {
+        pendingExtractions.first { $0.scheme == scheme && $0.state == .buildOnly }
     }
 
     func removePending(_ id: UUID) {
