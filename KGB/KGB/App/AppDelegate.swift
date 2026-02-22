@@ -56,20 +56,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startWatching() {
         let derivedDataPath = derivedDataAccess.derivedDataPath
 
-        watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] xcresultPath in
+        watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] path in
             guard let self else { return }
-            logger.info("Watcher detected: \(xcresultPath)")
 
-            // Parse scheme from filename for the pending row
-            let filename = URL(fileURLWithPath: xcresultPath).lastPathComponent
-            let scheme = XCResultParser.parseFilename(filename)?.scheme ?? "Unknown"
+            if path.hasSuffix(".xcactivitylog") {
+                logger.info("Watcher detected build log: \(path)")
+                Task { @MainActor in
+                    self.handleBuildLog(path)
+                }
+            } else if path.hasSuffix(".xcresult") {
+                logger.info("Watcher detected xcresult: \(path)")
+                let filename = URL(fileURLWithPath: path).lastPathComponent
+                let scheme = XCResultParser.parseFilename(filename)?.scheme ?? "Unknown"
 
-            Task { @MainActor in
-                let pendingId = self.commandStore.addPending(scheme: scheme, xcresultPath: xcresultPath, state: .waiting)
-                self.attemptExtraction(pendingId: pendingId, xcresultPath: xcresultPath)
+                Task { @MainActor in
+                    // Try to match to existing buildOnly pending entry
+                    if let existing = self.commandStore.pendingForScheme(scheme) {
+                        self.commandStore.updatePendingXcresultPath(existing.id, path: path)
+                        self.commandStore.updatePendingState(existing.id, to: .waiting)
+                        self.attemptExtraction(pendingId: existing.id, xcresultPath: path)
+                    } else {
+                        // No prior build log — create new pending entry
+                        let pendingId = self.commandStore.addPending(
+                            scheme: scheme, xcresultPath: path, state: .waiting
+                        )
+                        self.attemptExtraction(pendingId: pendingId, xcresultPath: path)
+                    }
+                }
             }
         }
         watcher?.start()
+    }
+
+    private func handleBuildLog(_ path: String) {
+        guard let info = BuildLogParser.parseFile(at: path) else {
+            logger.warning("Could not parse build log: \(path)")
+            return
+        }
+        logger.info("Build log detected: \(info.scheme) → \(info.destination)")
+        commandStore.addPending(scheme: info.scheme, destination: info.destination)
     }
 
     // MARK: - Retry extraction
