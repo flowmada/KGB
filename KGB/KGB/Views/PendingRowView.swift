@@ -6,36 +6,19 @@ struct PendingRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if pending.state == .failed {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
-            } else if pending.state == .buildOnly {
-                Image(systemName: "hammer")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-            }
+            statusIcon
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(pending.scheme)
-                    .font(.system(.body, weight: .medium))
-                switch pending.state {
-                case .waiting:
-                    Text("Waiting for Xcode\u{2026}")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .buildOnly:
-                    Text("Run (\u{2318}R) and stop to capture full command")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .failed:
-                    Text("Could not read build log")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                HStack(spacing: 6) {
+                    Text(pending.scheme)
+                        .font(.system(.body, weight: .medium))
+                    if let destination = pending.destination {
+                        Text(destination)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                statusText
             }
 
             Spacer()
@@ -49,5 +32,40 @@ struct PendingRowView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch pending.state {
+        case .waiting:
+            ProgressView()
+                .controlSize(.small)
+        case .buildOnly:
+            Image(systemName: "hammer")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+                .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private var statusText: some View {
+        switch pending.state {
+        case .waiting:
+            Text("Waiting for Xcode\u{2026}")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .buildOnly:
+            Text("Run (\u{2318}R) and stop to capture full command")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed:
+            Text("Could not read build log")
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
     }
 }
