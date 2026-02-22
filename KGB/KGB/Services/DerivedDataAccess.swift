@@ -28,11 +28,12 @@ final class DerivedDataAccess {
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
 
-        // Point the panel at the default DerivedData location
-        let defaultURL = URL(fileURLWithPath: NSHomeDirectory())
+        // Point the panel at the parent of DerivedData so it's visible and selectable
+        let derivedDataURL = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Developer/Xcode/DerivedData")
-        if FileManager.default.fileExists(atPath: defaultURL.path) {
-            panel.directoryURL = defaultURL
+        let parentURL = derivedDataURL.deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: parentURL.path) {
+            panel.directoryURL = parentURL
         }
 
         let response = panel.runModal()
