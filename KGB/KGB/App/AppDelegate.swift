@@ -28,12 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         popover.behavior = .transient
 
-        // Start watching immediately if we already have access
         if derivedDataAccess.hasAccess {
             startWatching()
+            scanExistingResults()
         }
 
-        // Watch for access changes to start watcher when granted
         accessObservation = withObservationTracking {
             _ = self.derivedDataAccess.hasAccess
         } onChange: { [weak self] in
@@ -46,9 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func onAccessChanged() {
         if derivedDataAccess.hasAccess && watcher == nil {
             startWatching()
+            scanExistingResults()
         }
 
-        // Re-observe for future changes
         accessObservation = withObservationTracking {
             _ = self.derivedDataAccess.hasAccess
         } onChange: { [weak self] in
@@ -58,32 +57,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Watching
+
     private func startWatching() {
         let derivedDataPath = derivedDataAccess.derivedDataPath
 
         watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] xcresultPath in
+            self?.processXCResult(at: xcresultPath, derivedDataPath: derivedDataPath)
+        }
+        watcher?.start()
+    }
+
+    // MARK: - Scan existing results
+
+    /// Find all .xcresult bundles from today and process them.
+    private func scanExistingResults() {
+        let derivedDataPath = derivedDataAccess.derivedDataPath
+        let todayStamp = todayDateStamp()
+
+        Task.detached { [weak self] in
             guard let self else { return }
-            Task {
-                do {
-                    let projectSourceDir = self.resolveProjectSourceDir(
-                        derivedDataPath: derivedDataPath,
-                        xcresultPath: xcresultPath
-                    )
+            let fm = FileManager.default
+            let derivedDataURL = URL(fileURLWithPath: derivedDataPath)
 
-                    let command = try await self.extractor.extract(
-                        xcresultPath: xcresultPath,
-                        projectSourceDir: projectSourceDir
-                    )
+            guard let projectDirs = try? fm.contentsOfDirectory(
+                at: derivedDataURL,
+                includingPropertiesForKeys: nil
+            ) else { return }
 
-                    await MainActor.run {
-                        self.commandStore.add(command)
+            for projectDir in projectDirs {
+                // Check Logs/Build/ and Logs/Test/ for .xcresult bundles
+                let logsDirs = ["Logs/Build", "Logs/Test"]
+                for logsDir in logsDirs {
+                    let logsURL = projectDir.appendingPathComponent(logsDir)
+                    guard let contents = try? fm.contentsOfDirectory(
+                        at: logsURL,
+                        includingPropertiesForKeys: nil
+                    ) else { continue }
+
+                    for item in contents where item.pathExtension == "xcresult" {
+                        let filename = item.lastPathComponent
+                        // Filter to today's results by checking the date stamp in the filename
+                        if filename.contains(todayStamp) {
+                            self.processXCResult(at: item.path, derivedDataPath: derivedDataPath)
+                        }
                     }
-                } catch {
-                    print("KGB: Skipped \(xcresultPath): \(error)")
                 }
             }
         }
-        watcher?.start()
+    }
+
+    /// Returns today's date as "YYYY.MM.DD" to match xcresult filename format.
+    private func todayDateStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy.MM.dd"
+        return formatter.string(from: Date())
+    }
+
+    // MARK: - Processing
+
+    private func processXCResult(at xcresultPath: String, derivedDataPath: String) {
+        Task {
+            do {
+                let projectSourceDir = self.resolveProjectSourceDir(
+                    derivedDataPath: derivedDataPath,
+                    xcresultPath: xcresultPath
+                )
+
+                let command = try await self.extractor.extract(
+                    xcresultPath: xcresultPath,
+                    projectSourceDir: projectSourceDir
+                )
+
+                await MainActor.run {
+                    self.commandStore.add(command)
+                }
+            } catch {
+                print("KGB: Skipped \(xcresultPath): \(error)")
+            }
+        }
     }
 
     /// Resolve the project source directory from DerivedData paths.
