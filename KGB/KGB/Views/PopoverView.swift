@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PopoverView: View {
     let store: CommandStore
+    let derivedDataAccess: DerivedDataAccess
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,9 +14,7 @@ struct PopoverView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                } label: {
+                SettingsLink {
                     Image(systemName: "gear")
                 }
                 .buttonStyle(.plain)
@@ -45,7 +44,28 @@ struct PopoverView: View {
                 Divider()
             }
 
-            if store.groupedByProject.isEmpty {
+            if !derivedDataAccess.hasAccess {
+                // Onboarding — request DerivedData access
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "hammer.fill")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Welcome to KGB")
+                        .font(.title3.bold())
+                    Text("KGB watches your DerivedData folder for Xcode builds and gives you one-click copyable xcodebuild commands.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Button("Grant Access to DerivedData") {
+                        derivedDataAccess.requestAccess()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                Spacer()
+            } else if store.groupedByProject.isEmpty {
                 Spacer()
                 Text("No builds detected yet")
                     .foregroundStyle(.secondary)
@@ -95,5 +115,5 @@ struct PopoverView: View {
             osVersion: "26.2", timestamp: Date().addingTimeInterval(-600)
         ))
         return store
-    }())
+    }(), derivedDataAccess: DerivedDataAccess())
 }

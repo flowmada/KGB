@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -6,10 +7,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private var watcher: DerivedDataWatcher?
     private let extractor = CommandExtractor()
+    private var accessObservation: (any Sendable)?
     let commandStore = CommandStore(
         persistenceURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("KGB/commands.json")
     )
+    let derivedDataAccess = DerivedDataAccess()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -21,17 +24,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover.contentViewController = NSHostingController(
-            rootView: PopoverView(store: commandStore)
+            rootView: PopoverView(store: commandStore, derivedDataAccess: derivedDataAccess)
         )
         popover.behavior = .transient
 
-        startWatching()
+        // Start watching immediately if we already have access
+        if derivedDataAccess.hasAccess {
+            startWatching()
+        }
+
+        // Watch for access changes to start watcher when granted
+        accessObservation = withObservationTracking {
+            _ = self.derivedDataAccess.hasAccess
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.onAccessChanged()
+            }
+        }
+    }
+
+    private func onAccessChanged() {
+        if derivedDataAccess.hasAccess && watcher == nil {
+            startWatching()
+        }
+
+        // Re-observe for future changes
+        accessObservation = withObservationTracking {
+            _ = self.derivedDataAccess.hasAccess
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.onAccessChanged()
+            }
+        }
     }
 
     private func startWatching() {
-        let derivedDataPath = UserDefaults.standard.string(forKey: "derivedDataPath")
-            .flatMap { $0.isEmpty ? nil : $0 }
-            ?? NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
+        let derivedDataPath = derivedDataAccess.derivedDataPath
 
         watcher = DerivedDataWatcher(path: derivedDataPath) { [weak self] xcresultPath in
             guard let self else { return }
@@ -59,8 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Resolve the project source directory from DerivedData paths.
-    /// DerivedData structure: DerivedData/ProjectName-hash/Logs/Build/xxx.xcresult
-    /// The project source dir is stored in build-request.json's containerPath.
     private func resolveProjectSourceDir(derivedDataPath: String, xcresultPath: String) -> String {
         let components = xcresultPath
             .replacingOccurrences(of: derivedDataPath + "/", with: "")
