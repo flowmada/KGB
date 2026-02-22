@@ -14,10 +14,6 @@ struct PopoverView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                SettingsLink {
-                    Image(systemName: "gear")
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -44,8 +40,8 @@ struct PopoverView: View {
                 Divider()
             }
 
+            // Main content
             if !derivedDataAccess.hasAccess {
-                // DerivedData not found
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "folder.badge.questionmark")
@@ -53,16 +49,11 @@ struct PopoverView: View {
                         .foregroundStyle(.secondary)
                     Text("DerivedData not found")
                         .font(.title3.bold())
-                    Text("Set a custom DerivedData path in Settings if yours isn't in the default location.")
+                    Text("Use \"Change\" below to select your DerivedData folder.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
-                    SettingsLink {
-                        Text("Open Settings")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
                 }
                 Spacer()
             } else if store.isScanning && store.groupedByProject.isEmpty {
@@ -103,6 +94,23 @@ struct PopoverView: View {
                     }
                 }
             }
+
+            // Footer — DerivedData path + Change button
+            Divider()
+            HStack(spacing: 8) {
+                Text(derivedDataAccess.tildeAbbreviatedPath)
+                    .font(.caption)
+                    .foregroundStyle(derivedDataAccess.hasAccess ? Color.secondary : Color.red)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button("Change") {
+                    derivedDataAccess.changeDerivedDataPath()
+                }
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
         .frame(width: 480, height: 360)
     }
