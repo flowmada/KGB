@@ -37,6 +37,16 @@ struct PendingExtractionTests {
         #expect(store.pendingExtractions.first?.isFailed == true)
     }
 
+    @Test func resetPending_clearsFailed() {
+        let store = CommandStore(persistenceURL: nil)
+        let pendingId = store.addPending(scheme: "MyApp", xcresultPath: "/path/result.xcresult")
+        store.failPending(pendingId)
+        #expect(store.pendingExtractions.first?.isFailed == true)
+
+        store.resetPending(pendingId)
+        #expect(store.pendingExtractions.first?.isFailed == false)
+    }
+
     @Test func removePending_removesPendingEntry() {
         let store = CommandStore(persistenceURL: nil)
         let pendingId = store.addPending(scheme: "MyApp", xcresultPath: "/path/result.xcresult")

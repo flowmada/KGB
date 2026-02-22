@@ -78,6 +78,12 @@ final class CommandStore {
         }
     }
 
+    func resetPending(_ id: UUID) {
+        if let idx = pendingExtractions.firstIndex(where: { $0.id == id }) {
+            pendingExtractions[idx].isFailed = false
+        }
+    }
+
     func removePending(_ id: UUID) {
         pendingExtractions.removeAll { $0.id == id }
     }

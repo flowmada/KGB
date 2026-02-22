@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Cancel existing retry task
                 retryTasks[pendingId]?.cancel()
                 retryTasks.removeValue(forKey: pendingId)
+                // Reset failed state so spinner shows again
+                commandStore.resetPending(pendingId)
                 // Restart extraction immediately
                 attemptExtraction(pendingId: pendingId, xcresultPath: pending.xcresultPath)
             }
