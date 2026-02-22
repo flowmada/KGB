@@ -51,8 +51,8 @@ enum BuildLogParser {
         } catch {
             return nil
         }
-        process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         guard let text = String(data: data, encoding: .utf8) else { return nil }
         return parse(text)
     }

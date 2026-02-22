@@ -61,8 +61,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             if path.hasSuffix(".xcactivitylog") {
                 logger.info("Watcher detected build log: \(path)")
+                let info = BuildLogParser.parseFile(at: path)
                 Task { @MainActor in
-                    self.handleBuildLog(path)
+                    guard let info else { return }
+                    logger.info("Build log detected: \(info.scheme) → \(info.destination)")
+                    self.commandStore.addPending(scheme: info.scheme, destination: info.destination)
                 }
             } else if path.hasSuffix(".xcresult") {
                 logger.info("Watcher detected xcresult: \(path)")
@@ -86,15 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher?.start()
-    }
-
-    private func handleBuildLog(_ path: String) {
-        guard let info = BuildLogParser.parseFile(at: path) else {
-            logger.warning("Could not parse build log: \(path)")
-            return
-        }
-        logger.info("Build log detected: \(info.scheme) → \(info.destination)")
-        commandStore.addPending(scheme: info.scheme, destination: info.destination)
     }
 
     // MARK: - Retry extraction

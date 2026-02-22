@@ -22,8 +22,9 @@ struct ProcessShellExecutor: ShellExecuting {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return pipe.fileHandleForReading.readDataToEndOfFile()
+        return data
     }
 }
 
