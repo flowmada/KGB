@@ -79,9 +79,11 @@ struct PopoverView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         // Pending extractions
                         ForEach(store.pendingExtractions) { pending in
-                            PendingRowView(pending: pending) {
+                            PendingRowView(pending: pending, onRetry: {
                                 retryExtraction(pending.id)
-                            }
+                            }, onDismiss: {
+                                store.removePending(pending.id)
+                            })
                             Divider().padding(.leading, 8)
                         }
 

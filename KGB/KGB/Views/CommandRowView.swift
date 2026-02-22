@@ -64,5 +64,10 @@ struct CommandRowView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .contextMenu {
+            Button("Delete", role: .destructive) {
+                store.removeCommand(command.id)
+            }
+        }
     }
 }

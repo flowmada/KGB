@@ -103,6 +103,11 @@ final class CommandStore {
         pendingExtractions.removeAll { $0.id == id }
     }
 
+    func removeCommand(_ id: UUID) {
+        allCommands.removeAll { $0.id == id }
+        save()
+    }
+
     // MARK: - Bug Reporting
 
     struct BugReport {

@@ -3,6 +3,7 @@ import SwiftUI
 struct PendingRowView: View {
     let pending: CommandStore.PendingExtraction
     let onRetry: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -32,6 +33,11 @@ struct PendingRowView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .contextMenu {
+            Button("Dismiss", role: .destructive) {
+                onDismiss()
+            }
+        }
     }
 
     @ViewBuilder
